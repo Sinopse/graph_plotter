@@ -204,7 +204,9 @@ class Plotter:
     # be set separately via @property
     # grid_spec derived from the number of dictionary keys in your data
 
-    def plot_heatmap(self, data, axes, orientation, zoom, min_max_vals,
+    def plot_heatmap(self, data, axes, /, *, orientation, zoom, min_max_vals,
+                     x=0,
+                     y=0,
                      # zoom=None,
                      # min_max_vals=None,
                      # orientation='vertical',
@@ -243,7 +245,9 @@ class Plotter:
         print(cnt, self.rows, self.cols)
 
         # assign x, y
-        y, x = axes
+        if isinstance(axes, dict):
+            for key in axes.keys():
+                y, x = axes[key]
 
         # assign min and max values for all colours
         if min_max_vals is None:
