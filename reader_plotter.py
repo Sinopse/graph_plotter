@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 import itertools
 import pathlib
+import gc
 
 class DataFormatter:
     def format_pl(self, data, axes, **kwargs):
@@ -41,6 +42,7 @@ class DataFormatter:
                     del np_array
                     del wavelength
                     del time
+                    gc.collect() # that makes difference?
 
                 else:
                     raise TypeError(f"Supplied type not DataFrame, supplied: {type(data)}")
@@ -50,13 +52,15 @@ class DataFormatter:
 
     # 28.11.2023
     # data preparation for dat files
-    def prepare_dat(self, data, rotate=False):
+    def format_dat(self, data, rotate=False):
         row, col = data.shape
         _data = pd.read_csv(data, sep='\s+', low_memory=False, nrows=6, header=None)
         time_stamps = _data.iloc[3:6, 2]
         wavelength = data.iloc[:, 0]
+
         # new time Series
         time = pd.Series(time_stamps, dtype='float')
+
         # new wavelength index
         w_index = pd.Series(wavelength, name='wavelength', dtype='float')
 
@@ -84,6 +88,12 @@ class DataFormatter:
 
         # create new DataFrame
         data = pd.DataFrame(array, columns=w_index, index=t_index)
+
+        # clean-up
+        del array
+        del t_index
+        del w_index
+
         return data
 
 
