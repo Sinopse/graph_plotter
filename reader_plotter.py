@@ -5,57 +5,47 @@ import matplotlib.pyplot as plt
 import itertools
 import pathlib
 
-class Wrangler:
-    def traverse_dict(self):
-        return self._traverse_dict(self.__dict__)
+class DataFormatter:
+    def format_pl(self, data, axes, **kwargs):
+        # no recursive behavior -> think about it later
 
-    def _traverse_dict(self, instance_dict):
-        for key, value in instance_dict.items():
-            _temp = self._traverse(instance_dict[key])
-            instance_dict[key] = _temp
-        return instance_dict
-
-    def _traverse(self, data):
-        global axes  # ugly way of adding axes but it works, maybe *args, **kwargs?
         if isinstance(data, dict):
             for key, frame in data.items():
                 if isinstance(frame, pd.DataFrame):
                     wavelength = frame[0][1:]
                     del frame[0]
 
-                    ## convert str to float, retrieve Time
-                    wvf = wavelength.to_numpy()
-                    _list = []
-                    for i in wvf:
-                        num = float(i)
-                        _list.append(num)
+                    wv = wavelength.to_numpy()
+                    _wv = [str(i) for i in wv]
 
-                    wavelength = pd.Series(_list)
+                    wavelength = pd.Series(_wv)
                     time = frame.loc[0]
                     frame.drop(0, inplace=True)
+                    np_array = frame.to_numpy()
+
                     # axes
-                    axes = (wavelength, time)
-                    # print(f"Wavelength: {wavelength}\n"
-                    #       f"Time: {time}\n"
-                    #       f"Wavelength Max: {wavelength.max()}\n")
+                    axes_formatted = (wavelength, time)
 
                     ## convert to an NumPy array and then again to a DF with new indices
-                    array = frame.to_numpy()
                     # min_val = min(val.min() for val in array)
                     # max_val = max(val.max() for val in array)
 
-                    new_frame = pd.DataFrame(array, index=wavelength, columns=time)
-                    data[key] = new_frame
+                    frame_formatted = pd.DataFrame(np_array, index=wavelength, columns=time)
+                    data[key] = frame_formatted
+                    axes[key] = axes_formatted
+
+                    del frame
+                    del wv
+                    del _wv
+                    del np_array
+                    del wavelength
+                    del time
+
                 else:
                     raise TypeError(f"Supplied type not DataFrame, supplied: {type(data)}")
-        elif isinstance(data, list):
-            data.append(axes)
-        #  print(axes)
-        elif data is None:
-            pass
         else:
-            raise TypeError(f"Wrong type supplied -> dict or list, supplied: {type(data)}")
-        return data
+            raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
+        return data, axes
 
     # 28.11.2023
     # data preparation for dat files
@@ -96,10 +86,10 @@ class Wrangler:
         return data
 
 
-class Reader(Wrangler):
+class Reader(DataFormatter):
     def __init__(self, min_val=None, max_val=None):
         self._data = {}
-        self._axes = []
+        self._axes = {}
         self._min_val = min_val
         self._max_val = max_val
 
@@ -123,13 +113,15 @@ class Reader(Wrangler):
 
     # 28.11.2023 this func will be deprecated in near future
     # PL data from In-Situ PL setup
-    def to_dict(self, files):
+    def read_csv(self, files):
         if isinstance(files, list):
             for num, f in enumerate(files, 1):
                 try:
                     _f = pd.read_csv(f, skiprows=28, header=None, low_memory=False)
 
                     # retrieve sample names -> first implementation, consider a defaultdict?
+                    # data management -> sample name, composition, etc.
+
                     sample_name = self.get_sample_name(f)
                     if sample_name in self._data.keys():
                         print(f'*** {sample_name} exists ***')

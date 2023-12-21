@@ -9,10 +9,17 @@ lst = list(path.rglob('*.csv'))
 
 #print(lst)
 r = rd.Reader()
-r.to_dict(lst)
-r.traverse_dict()
-dic = r.return_data()
-axes = r.return_axes()
+r.read_csv(lst)
+# r.__repr__()
+data = r._data
+axes = r._axes
+d, axs = r.format_pl(data, axes)
+
+#print(d)
+#print(axs)
+
+
+# axes = r.return_axes()
 vals = r.get_min_max_vals()
 p1 = rd.Plotter()
 p2 = rd.Plotter((14, 14))
@@ -24,5 +31,5 @@ kwargs = {
 }
 
 # introduce as **kwargs
-p1.plot_heatmap(dic, axes, zoom=(20, 60, 600, 800), **kwargs)
-p2.plot_heatmap(dic, axes, zoom=None, **kwargs)
+p1.plot_heatmap(d, axes, zoom=(20, 60, 600, 800), **kwargs)
+p2.plot_heatmap(d, axes, zoom=None, **kwargs)
