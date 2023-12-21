@@ -16,7 +16,7 @@ class DataFormatter:
                     del frame[0]
 
                     wv = wavelength.to_numpy()
-                    _wv = [str(i) for i in wv]
+                    _wv = [float(i) for i in wv]
 
                     wavelength = pd.Series(_wv)
                     time = frame.loc[0]
@@ -34,6 +34,7 @@ class DataFormatter:
                     data[key] = frame_formatted
                     axes[key] = axes_formatted
 
+                    # clean-up
                     del frame
                     del wv
                     del _wv
@@ -245,7 +246,7 @@ class Plotter:
         print(cnt, self.rows, self.cols)
 
         # assign x, y
-        if isinstance(axes, dict):
+        if isinstance(axes, dict) and not None:
             for key in axes.keys():
                 y, x = axes[key]
 
