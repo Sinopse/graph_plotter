@@ -42,7 +42,7 @@ class DataFormatter:
                     del np_array
                     del wavelength
                     del time
-                    gc.collect() # that makes difference?
+                    gc.collect() # that makes difference? runtime?
 
                 else:
                     raise TypeError(f"Supplied type not DataFrame, supplied: {type(data)}")
@@ -54,9 +54,12 @@ class DataFormatter:
     # data preparation for dat files
     def format_dat(self, data, rotate=False):
         row, col = data.shape
-        _data = pd.read_csv(data, sep='\s+', low_memory=False, nrows=6, header=None)
-        time_stamps = _data.iloc[3:6, 2]
+        print(f'row: {row} \ncol: {col}\n')
+
+        _time_data = pd.read_csv(data, sep='\s+', low_memory=False, nrows=6, header=None)
+        time_stamps = _time_data.iloc[3:6, 2]
         wavelength = data.iloc[:, 0]
+        del data[0]
 
         # new time Series
         time = pd.Series(time_stamps, dtype='float')
@@ -80,19 +83,23 @@ class DataFormatter:
         t_index = pd.Series(time_lst, name='time', dtype='float')
 
         # DataFrame to array
-        array = _data.to_numpy()
+        np_array = data.to_numpy()
 
         # custom array rotation if needed
-        if rotate:
-            array = np.rot90(array)
+        # if rotate:
+        #     np_array = np.rot90(np_array)
 
         # create new DataFrame
-        data = pd.DataFrame(array, columns=w_index, index=t_index)
+        data = pd.DataFrame(np_array, index=w_index, columns=t_index)
+
+        #print(data)
 
         # clean-up
-        del array
+        del _time_data
+        del np_array
         del t_index
         del w_index
+        gc.collect()
 
         return data
 
@@ -215,7 +222,7 @@ class Plotter:
     # be set separately via @property
     # grid_spec derived from the number of dictionary keys in your data
 
-    def plot_heatmap(self, data, axes, /, *, orientation, zoom, min_max_vals,
+    def plot_heatmap(self, data,  /, *, axes, orientation, zoom, min_max_vals,
                      x=0,
                      y=0,
                      # zoom=None,
@@ -304,8 +311,12 @@ class Plotter:
                     d = d.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
                 else:
                     raise TypeError("Supplied type must be tuple or list!")
+            elif not axes and not zoom:
+                pass
             else:
                 self.extent = (x.min(), x.max(), y.min(), y.max())
+
+            print(d)
 
             plt.imshow(d,
                        extent=self.extent,

@@ -88,3 +88,4 @@ def time_stamp():
     plt.show()
 
 plot(data)
+time_stamp()

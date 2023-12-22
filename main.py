@@ -31,5 +31,15 @@ kwargs = {
 }
 
 # introduce as **kwargs
-p1.plot_heatmap(d, axes, zoom=(20, 60, 600, 800), **kwargs)
-p2.plot_heatmap(d, axes, zoom=None, **kwargs)
+#p1.plot_heatmap(d, axes, zoom=(20, 60, 600, 800), **kwargs)
+#p2.plot_heatmap(d, axes, zoom=None, **kwargs)
+
+# reföectanse data
+pl30 = '/Users/alexander/Desktop/HZB_UV_vis_Laytec/reflectance_data/2023-12-14/14/dat files/AT-55.dat'
+
+pl = rd.Reader()
+pl_data = pl.read_dat(pl30)
+formatted  = pl.format_dat(pl_data)
+pl_plotter = rd.Plotter()
+
+pl_plotter.plot_heatmap(formatted, axes=None, zoom=None, **kwargs)
