@@ -52,61 +52,72 @@ class DataFormatter:
 
     # 28.11.2023
     # data preparation for dat files
-    def format_dat(self, data, rotate=False):
-        row, col = data.shape
-        print(f'row: {row} \ncol: {col}\n')
+    def format_dat(self, data, flip=False, time=None):
+        if isinstance(data, Reader):
+            if hasattr(data, '_data') and hasattr(data, '_time_data'):
+                for key, dataframe in data.__dict__['_data'].items():
+                    row, col = dataframe.shape
+                    print(f'row: {row} \ncol: {col}\n')
 
-        _time_data = pd.read_csv(data, sep='\s+', low_memory=False, nrows=6, header=None)
-        time_stamps = _time_data.iloc[3:6, 2]
-        wavelength = data.iloc[:, 0]
-        del data[0]
+                    # time Series
+                    if key in data.__dict__['_time_data']:
+                        _time_data = data.__dict__['_time_data'][key]
+                        time_stamps = _time_data.iloc[3:6, 2]
+                        time = pd.Series(time_stamps, dtype='float')
 
-        # new time Series
-        time = pd.Series(time_stamps, dtype='float')
+                    wavelength = dataframe.iloc[:, 0]
+                    del dataframe[0]
 
-        # new wavelength index
-        w_index = pd.Series(wavelength, name='wavelength', dtype='float')
+                    # new wavelength index
+                    w_index = pd.Series(wavelength, name='wavelength', dtype='float')
 
-        # time stamps from measurement data
-        t_min, t_max, t_delta = time
-        new_delta = t_max / (col - 1)
+                    # time stamps from measurement data
+                    t_min, t_max, t_delta = time
+                    new_delta = t_max / (col - 1)
 
-        # calculate each time
-        cnt = 1
-        time_lst = []
-        while t_min + new_delta <= t_max + new_delta:
-            time_lst.append(round(t_min, 4))
-            cnt += 1
-            t_min += new_delta
+                    # calculate each time
+                    cnt = 1
+                    time_lst = []
+                    while t_min + new_delta <= t_max + new_delta:
+                        time_lst.append(round(t_min, 4))
+                        cnt += 1
+                        t_min += new_delta
 
-        # new time index
-        t_index = pd.Series(time_lst, name='time', dtype='float')
+                    # new time index
+                    t_index = pd.Series(time_lst, name='time', dtype='float')
 
-        # DataFrame to array
-        np_array = data.to_numpy()
+                    # DataFrame to array
+                    np_array = dataframe.to_numpy()
 
-        # custom array rotation if needed
-        # if rotate:
-        #     np_array = np.rot90(np_array)
+                    # custom array rotation if needed
+                    _data = pd.DataFrame(np_array, index=w_index, columns=t_index)
 
-        # create new DataFrame
-        data = pd.DataFrame(np_array, index=w_index, columns=t_index)
+                    if flip:
+                        np_array = np.rot90(np_array)
+                        _data = pd.DataFrame(np_array, index=t_index, columns=w_index)
 
-        #print(data)
+                    # create new DataFrame
+                    data.__dict__['_data'][key] = _data
 
-        # clean-up
-        del _time_data
-        del np_array
-        del t_index
-        del w_index
-        gc.collect()
+                #print(data)
 
-        return data
+                # clean-up
+                del dataframe #??? needed here?
+                del _data
+                del _time_data
+                del np_array
+                del t_index
+                del w_index
+                gc.collect()
+        else:
+            raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
+        return data.__dict__['_data']
 
 
 class Reader(DataFormatter):
     def __init__(self, min_val=None, max_val=None):
         self._data = {}
+        self._time_data = {}
         self._axes = {}
         self._min_val = min_val
         self._max_val = max_val
@@ -125,9 +136,13 @@ class Reader(DataFormatter):
             sample_name = file.split(sep='/')[-1]  # sample name
             _file = pd.read_csv(file, skiprows=11, sep='\s+', header=None, skipfooter=1, engine='python')
             self._data[sample_name] = _file
+
+            _time_data = pd.read_csv(file, sep='\s+', low_memory=False, nrows=6, header=None)
+            self._time_data[sample_name] = _time_data
+
         else:
             raise TypeError("Not a path")
-        return self._data
+        return self
 
     # 28.11.2023 this func will be deprecated in near future
     # PL data from In-Situ PL setup
@@ -192,12 +207,6 @@ class Reader(DataFormatter):
         for key in self._data.keys():
             yield self._data[key], key
 
-    def return_data(self):
-        return self._data
-
-    def return_axes(self):
-        return self._axes[0]
-
     def __repr__(self):
         print(self._axes)
         for k, v in self._data.items():
@@ -230,108 +239,110 @@ class Plotter:
                      # orientation='vertical',
                      ):
         # define number of cols and rows
-        cnt = len(data)
+        if isinstance(data, dict):
+            cnt = len(data)
 
-        if orientation == 'vertical':
-            if cnt == 1:
-                pass
-            elif cnt == 2:
-                self.rows = cnt
-            elif cnt > 2 and cnt % 2 == 0:
-                self.rows = cnt // 2
-                self.cols = self.rows // 2
-            else:
-                self.rows = cnt // 2
-                self.cols = cnt // self.rows
-                self.rows += 1
-
-        elif orientation == 'horizontal':
-            if cnt == 1:
-                pass
-            elif cnt == 2:
-                self.cols = cnt
-            elif cnt > 2 and cnt % 2 == 0:
-                self.cols = cnt // 2
-                self.rows = self.cols // 2
-            else:
-                self.cols = cnt // 2
-                self.rows = self.cols - self.rows
-        else:
-            raise ValueError('Orientation not defined: horizontal or vertical')
-
-        # check number of graphs, rows and cols
-        print(cnt, self.rows, self.cols)
-
-        # assign x, y
-        if isinstance(axes, dict) and not None:
-            for key in axes.keys():
-                y, x = axes[key]
-
-        # assign min and max values for all colours
-        if min_max_vals is None:
-            pass
-        else:
-            min_max_vals_unpacked = list(itertools.chain(*min_max_vals))
-            min_val = min(min_max_vals_unpacked)
-            max_val = max(min_max_vals_unpacked)
-            # print(min_max_vals_unpacked)
-
-        fig = plt.figure(figsize=self.fig_size)
-        gs = fig.add_gridspec(nrows=self.rows, ncols=self.cols, hspace=0, wspace=0)
-        axs = gs.subplots(sharex=True, sharey=True)
-
-        ######
-        # get plot indices right
-        # original line
-        for index, key in enumerate(data.keys(), 1):
-            # for index, key, ax in zip(data, data.keys(), axs.flat):
-            # select dataframe with key
-
-            plt.subplot(self.rows, self.cols, index)
-            d = data[key]
-
-            # zoom window coordinates
-            if zoom:
-                if isinstance(zoom, tuple) or isinstance(zoom, list):
-                    x1, x2, y1, y2, *rest = zoom
-                    # bounding boy that the image will fill
-                    # -> coincides with the axes units
-                    self.extent = (x1, x2, y1, y2)
-
-                    # translate coordinates into indices
-                    # maye need to introduce more precise rounding
-                    # leave last item in the list and access first element -> index
-                    x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1].pop()[0]
-                    x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2].pop()[0]
-
-                    y1_idx = [[i, x] for i, x in enumerate(y) if x <= y1].pop()[0]
-                    y2_idx = [[i, x] for i, x in enumerate(y) if x <= y2].pop()[0]
-
-                    # slice of the DataFrame for zoom
-                    d = d.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
+            if orientation == 'vertical':
+                if cnt == 1:
+                    pass
+                elif cnt == 2:
+                    self.rows = cnt
+                elif cnt > 2 and cnt % 2 == 0:
+                    self.rows = cnt // 2
+                    self.cols = self.rows // 2
                 else:
-                    raise TypeError("Supplied type must be tuple or list!")
-            elif not axes and not zoom:
+                    self.rows = cnt // 2
+                    self.cols = cnt // self.rows
+                    self.rows += 1
+
+            elif orientation == 'horizontal':
+                if cnt == 1:
+                    pass
+                elif cnt == 2:
+                    self.cols = cnt
+                elif cnt > 2 and cnt % 2 == 0:
+                    self.cols = cnt // 2
+                    self.rows = self.cols // 2
+                else:
+                    self.cols = cnt // 2
+                    self.rows = self.cols - self.rows
+            else:
+                raise ValueError('Orientation not defined: horizontal or vertical')
+
+            # check number of graphs, rows and cols
+            print(cnt, self.rows, self.cols)
+
+            # assign x, y
+            if isinstance(axes, dict) and not None:
+                for key in axes.keys():
+                    y, x = axes[key]
+
+            # assign min and max values for all colours
+            if min_max_vals is None:
                 pass
             else:
-                self.extent = (x.min(), x.max(), y.min(), y.max())
+                min_max_vals_unpacked = list(itertools.chain(*min_max_vals))
+                min_val = min(min_max_vals_unpacked)
+                max_val = max(min_max_vals_unpacked)
+                # print(min_max_vals_unpacked)
 
-            print(d)
+            fig = plt.figure(figsize=self.fig_size)
+            gs = fig.add_gridspec(nrows=self.rows, ncols=self.cols, hspace=0, wspace=0)
+            axs = gs.subplots(sharex=True, sharey=True)
 
-            plt.imshow(d,
-                       extent=self.extent,
-                       interpolation='nearest',
-                       aspect='auto')
+            ######
+            # get plot indices right
+            # original line
+            for index, key in enumerate(data.keys(), 1):
+                # for index, key, ax in zip(data, data.keys(), axs.flat):
+                # select dataframe with key
 
-            plt.title(str(key), y=0.8,
-                      loc='left',
-                      color='white')
+                plt.subplot(self.rows, self.cols, index)
+                d = data[key]
 
-            fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
-            fig.text(0.05, 0.45, 'Wavelength / nm', ha='center', rotation='vertical', fontsize=16)
+                # zoom window coordinates
+                if zoom:
+                    if isinstance(zoom, tuple) or isinstance(zoom, list):
+                        x1, x2, y1, y2, *rest = zoom
+                        # bounding boy that the image will fill
+                        # -> coincides with the axes units
+                        self.extent = (x1, x2, y1, y2)
 
-        plt.show()
+                        # translate coordinates into indices
+                        # maye need to introduce more precise rounding
+                        # leave last item in the list and access first element -> index
+                        x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1].pop()[0]
+                        x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2].pop()[0]
 
+                        y1_idx = [[i, x] for i, x in enumerate(y) if x <= y1].pop()[0]
+                        y2_idx = [[i, x] for i, x in enumerate(y) if x <= y2].pop()[0]
+
+                        # slice of the DataFrame for zoom
+                        d = d.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
+                    else:
+                        raise TypeError("Supplied type must be tuple or list!")
+                elif not axes and not zoom:
+                    pass
+                else:
+                    self.extent = (x.min(), x.max(), y.min(), y.max())
+
+                print(d)
+
+                plt.imshow(d,
+                           extent=self.extent,
+                           interpolation='nearest',
+                           aspect='auto')
+
+                plt.title(str(key), y=0.8,
+                          loc='left',
+                          color='white')
+
+                fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
+                fig.text(0.05, 0.45, 'Wavelength / nm', ha='center', rotation='vertical', fontsize=16)
+
+            plt.show()
+        else:
+            raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
 
 plt.close(fig='all')
 
