@@ -85,6 +85,7 @@ class DataFormatter:
 
                     # new time index
                     t_index = pd.Series(time_lst, name='time', dtype='float')
+                    #t_index.sort_values(ascending=False)
 
                     # DataFrame to array
                     np_array = dataframe.to_numpy()
@@ -231,7 +232,7 @@ class Plotter:
     # be set separately via @property
     # grid_spec derived from the number of dictionary keys in your data
 
-    def plot_heatmap(self, data,  /, *, axes, orientation, zoom, min_max_vals,
+    def plot_heatmap(self, data, axes, orientation, zoom, min_max_vals,
                      x=0,
                      y=0,
                      # zoom=None,
@@ -272,10 +273,12 @@ class Plotter:
             # check number of graphs, rows and cols
             print(cnt, self.rows, self.cols)
 
-            # assign x, y
-            if isinstance(axes, dict) and not None:
+            # assign x, y axs
+            if isinstance(axes, dict) and not None: # x and y cant be = 0!
                 for key in axes.keys():
                     y, x = axes[key]
+            else:
+                pass
 
             # assign min and max values for all colours
             if min_max_vals is None:
@@ -308,17 +311,56 @@ class Plotter:
                         # -> coincides with the axes units
                         self.extent = (x1, x2, y1, y2)
 
+                        #assign axis from DataFrame
+                        y = [i for i in d.index]
+                        x = [i for i in d.columns]
+                        row, col = d.shape
+
                         # translate coordinates into indices
                         # maye need to introduce more precise rounding
                         # leave last item in the list and access first element -> index
-                        x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1].pop()[0]
-                        x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2].pop()[0]
+                        #x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1].pop()[0]
+                        #x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2].pop()[0]
 
-                        y1_idx = [[i, x] for i, x in enumerate(y) if x <= y1].pop()[0]
-                        y2_idx = [[i, x] for i, x in enumerate(y) if x <= y2].pop()[0]
+                        #y1_idx = [[i, x] for i, x in enumerate(y) if x <= y1].pop()[0]
+                        #y2_idx = [[i, x] for i, x in enumerate(y) if x <= y2].pop()[0]
+
+                        x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1]
+                        x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2]
+
+                        y1_idx = [[i, x] for i, x in enumerate(y) if x <= y1]
+                        y2_idx = [[i, x] for i, x in enumerate(y) if x <= y2]
+
+                        # check if there are empty lists
+                        # a more efficient way of writing the same thing below?
+                        if x1_idx:
+                            x1_idx = x1_idx.pop()[0]
+                        else:
+                            x1_idx = 0
+
+                        if x2_idx:
+                            x2_idx = x2_idx.pop()[0]
+                        else:
+                            x1_idx = 0
+
+                        if y1_idx:
+                            y1_idx = y1_idx.pop()[0]
+                        else:
+                            y1_idx = 0
+
+                        if y2_idx:
+                            y2_idx = y2_idx.pop()[0]
+                        else:
+                            y2_idx = 0
+
+                        #print(x1_idx, x2_idx)
+                        print("y1: ", y1_idx, "y2: ", y2_idx)
+                        print('lower limit', row-y1_idx)
+                        print(f'indices: y2 = {y2_idx}, y1 = {row-y1_idx} \n')
 
                         # slice of the DataFrame for zoom
-                        d = d.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
+                        #d = d.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
+                        d = d.iloc[(row - y2_idx):(row - y1_idx), x1_idx:x2_idx]
                     else:
                         raise TypeError("Supplied type must be tuple or list!")
                 elif not axes and not zoom:
@@ -326,19 +368,18 @@ class Plotter:
                 else:
                     self.extent = (x.min(), x.max(), y.min(), y.max())
 
-                print(d)
-
                 plt.imshow(d,
                            extent=self.extent,
                            interpolation='nearest',
+                           origin='upper',
                            aspect='auto')
 
                 plt.title(str(key), y=0.8,
                           loc='left',
                           color='white')
 
-                fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
-                fig.text(0.05, 0.45, 'Wavelength / nm', ha='center', rotation='vertical', fontsize=16)
+                #fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
+                #fig.text(0.05, 0.45, 'Wavelength / nm', ha='center', rotation='vertical', fontsize=16)
 
             plt.show()
         else:

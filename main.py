@@ -39,7 +39,10 @@ pl30 = '/Users/alexander/Desktop/HZB_UV_vis_Laytec/reflectance_data/2023-12-14/1
 
 pl = rd.Reader()
 pl_data = pl.read_dat(pl30)
-formatted  = pl.format_dat(pl_data)
+formatted = pl.format_dat(pl_data, flip=True)
 pl_plotter = rd.Plotter()
+pl_plotter2 = rd.Plotter()
 
-pl_plotter.plot_heatmap(formatted, axes=None, zoom=None, **kwargs)
+pl_plotter.plot_heatmap(formatted, axes=None, zoom=(400, 1000, 5, 19), **kwargs)
+#pl_plotter.plot_heatmap(formatted, axes=None, zoom=(5, 60, 400, 800), **kwargs)
+#pl_plotter2.plot_heatmap(formatted, axes=None, zoom=None, **kwargs)
