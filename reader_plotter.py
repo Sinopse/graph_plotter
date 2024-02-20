@@ -73,15 +73,21 @@ class DataFormatter:
 
                     # time stamps from measurement data
                     t_min, t_max, t_delta = time
-                    new_delta = t_max / (col - 1)
+                    print(t_min, t_max, t_delta)
+                    new_delta = (t_max - t_min) / (col - 1) # minus the first columns with wavelength vals
+                    new_delta = round(new_delta, 10)
+                    print('calculated: ', new_delta)
 
                     # calculate each time
-                    cnt = 1
+                    new_time = t_min
+                    cnt = 0
                     time_lst = []
-                    while t_min + new_delta <= t_max + new_delta:
-                        time_lst.append(round(t_min, 4))
+                    #while t_min + new_delta <= t_max + new_delta:
+                    #while new_time + new_delta <= t_max + new_delta:
+                    while cnt != col - 1:
+                        time_lst.append(round(new_time, 4))
                         cnt += 1
-                        t_min += new_delta
+                        new_time += new_delta
 
                     # new time index
                     t_index = pd.Series(time_lst, name='time', dtype='float')
@@ -228,11 +234,22 @@ class Plotter:
     def plot_graph(self):
         raise NotImplementedError
 
+    def _prepare_dat(self, data, idxs, rows, *args, **kwargs):
+        x1_idx, x2_idx, y1_idx, y2_idx, = idxs
+        data = data.iloc[(rows - y2_idx):(rows - y1_idx), x1_idx:x2_idx]
+        return data
+
+    def _prepare_csv(self, data, idxs, *args, **kwargs):
+        x1_idx, x2_idx, y1_idx, y2_idx, = idxs
+        data = data.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
+        return data
+
+
     # function that plots heatmaps -> fig_size and grid_spec can
     # be set separately via @property
     # grid_spec derived from the number of dictionary keys in your data
 
-    def plot_heatmap(self, data, axes, orientation, zoom, min_max_vals,
+    def plot_heatmap(self, data, axes, orientation, format, zoom, min_max_vals=None,
                      x=0,
                      y=0,
                      # zoom=None,
@@ -242,6 +259,7 @@ class Plotter:
         # define number of cols and rows
         if isinstance(data, dict):
             cnt = len(data)
+            print(cnt)
 
             if orientation == 'vertical':
                 if cnt == 1:
@@ -293,37 +311,26 @@ class Plotter:
             gs = fig.add_gridspec(nrows=self.rows, ncols=self.cols, hspace=0, wspace=0)
             axs = gs.subplots(sharex=True, sharey=True)
 
-            ######
-            # get plot indices right
-            # original line
-            for index, key in enumerate(data.keys(), 1):
-                # for index, key, ax in zip(data, data.keys(), axs.flat):
-                # select dataframe with key
+            if zoom:
+                for index, key in enumerate(data.keys(), 1):
+                    d = data[key]
 
-                plt.subplot(self.rows, self.cols, index)
-                d = data[key]
-
-                # zoom window coordinates
-                if zoom:
                     if isinstance(zoom, tuple) or isinstance(zoom, list):
+                        ### what if data is flipped? ### -> check condition
+
                         x1, x2, y1, y2, *rest = zoom
-                        # bounding boy that the image will fill
+                        # bounding box that the image will fill
                         # -> coincides with the axes units
                         self.extent = (x1, x2, y1, y2)
 
-                        #assign axis from DataFrame
+                        # assign axis from DataFrame
                         y = [i for i in d.index]
                         x = [i for i in d.columns]
-                        row, col = d.shape
+                        rows, cols = d.shape
 
                         # translate coordinates into indices
                         # maye need to introduce more precise rounding
                         # leave last item in the list and access first element -> index
-                        #x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1].pop()[0]
-                        #x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2].pop()[0]
-
-                        #y1_idx = [[i, x] for i, x in enumerate(y) if x <= y1].pop()[0]
-                        #y2_idx = [[i, x] for i, x in enumerate(y) if x <= y2].pop()[0]
 
                         x1_idx = [[i, x] for i, x in enumerate(x) if x <= x1]
                         x2_idx = [[i, x] for i, x in enumerate(x) if x <= x2]
@@ -353,20 +360,35 @@ class Plotter:
                         else:
                             y2_idx = 0
 
-                        #print(x1_idx, x2_idx)
-                        print("y1: ", y1_idx, "y2: ", y2_idx)
-                        print('lower limit', row-y1_idx)
-                        print(f'indices: y2 = {y2_idx}, y1 = {row-y1_idx} \n')
+                        idxs = [x1_idx, x2_idx, y1_idx, y2_idx]
+                        # print(x1_idx, x2_idx)
+                        # print("y1: ", y1_idx, "y2: ", y2_idx)
+                        # print('lower limit', row - y1_idx)
+                        # print(f'indices: y2 = {y2_idx}, y1 = {row - y1_idx} \n')
 
                         # slice of the DataFrame for zoom
-                        #d = d.iloc[y1_idx:y2_idx, x1_idx:x2_idx]
-                        d = d.iloc[(row - y2_idx):(row - y1_idx), x1_idx:x2_idx]
-                    else:
-                        raise TypeError("Supplied type must be tuple or list!")
-                elif not axes and not zoom:
-                    pass
-                else:
-                    self.extent = (x.min(), x.max(), y.min(), y.max())
+
+                        if format == 'dat':
+                            d = self._prepare_dat(d, idxs, rows)
+                            data[key] = d
+                        elif format == 'csv':
+                            d = self._prepare_csv(d, idxs)
+                            data[key] = d
+                        else:
+                            pass
+
+
+            ######
+            # get plot indices right
+            # original line
+            for index, key in enumerate(data.keys(), 1):
+                # for index, key, ax in zip(data, data.keys(), axs.flat):
+                # select dataframe with key
+
+                plt.subplot(self.rows, self.cols, index)
+                d = data[key]
+
+                # zoom window coordinates
 
                 plt.imshow(d,
                            extent=self.extent,
