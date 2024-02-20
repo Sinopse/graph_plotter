@@ -73,15 +73,21 @@ class DataFormatter:
 
                     # time stamps from measurement data
                     t_min, t_max, t_delta = time
-                    new_delta = t_max / (col - 1)
+                    print(t_min, t_max, t_delta)
+                    new_delta = (t_max - t_min) / (col - 1) # minus the first columns with wavelength vals
+                    new_delta = round(new_delta, 10)
+                    print('calculated: ', new_delta)
 
                     # calculate each time
-                    cnt = 1
+                    new_time = t_min
+                    cnt = 0
                     time_lst = []
-                    while t_min + new_delta <= t_max + new_delta:
-                        time_lst.append(round(t_min, 4))
+                    #while t_min + new_delta <= t_max + new_delta:
+                    #while new_time + new_delta <= t_max + new_delta:
+                    while cnt != col - 1:
+                        time_lst.append(round(new_time, 4))
                         cnt += 1
-                        t_min += new_delta
+                        new_time += new_delta
 
                     # new time index
                     t_index = pd.Series(time_lst, name='time', dtype='float')

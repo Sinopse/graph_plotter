@@ -82,6 +82,8 @@ def plot(data):
 
 path = '/Users/alexander/Documents/HZB Arbeit/Code_Bespiele/reflectance_data_test.txt'
 def time_stamp():
+    print(data.index[700])
+    print(data.columns[50])
     interference_pat_wv1 = data.iloc[700]
     interference_pat_wv2 = data.iloc[:, 50]
     fig = plt.figure(figsize=(4,4), dpi=200)
@@ -89,12 +91,7 @@ def time_stamp():
     #fig, axs = plt.subplots(2)
     axs[0].plot(interference_pat_wv1, linewidth=0.1)
     axs[1].plot(interference_pat_wv2, linewidth=0.5)
-    #plt.show()
-    export_data = interference_pat_wv2.to_string()
-    print(export_data)
-
-    with open(path) as f:
-        f.write(export_data)
+    plt.show()
 
 #plot(data)
 time_stamp()
