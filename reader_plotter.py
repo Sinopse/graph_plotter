@@ -139,7 +139,9 @@ class Reader(DataFormatter):
         pass
 
     def read_dat(self, file, *args, **kwargs):
-        if isinstance(file, str):
+
+
+        if isinstance(file, str) or isinstance(file, pathlib.PosixPath):
             sample_name = file.split(sep='/')[-1]  # sample name
             _file = pd.read_csv(file, skiprows=11, sep='\s+', header=None, skipfooter=1, engine='python')
             self._data[sample_name] = _file
@@ -322,6 +324,8 @@ class Plotter:
                         # bounding box that the image will fill
                         # -> coincides with the axes units
                         self.extent = (x1, x2, y1, y2)
+                        print(x1, x2)
+                        print(y1, y2)
 
                         # assign axis from DataFrame
                         y = [i for i in d.index]
@@ -364,7 +368,7 @@ class Plotter:
                         # print(x1_idx, x2_idx)
                         # print("y1: ", y1_idx, "y2: ", y2_idx)
                         # print('lower limit', row - y1_idx)
-                        # print(f'indices: y2 = {y2_idx}, y1 = {row - y1_idx} \n')
+                        #print(f'indices: y2 = {y2_idx}, y1 = {row - y1_idx} \n')
 
                         # slice of the DataFrame for zoom
 
@@ -377,6 +381,9 @@ class Plotter:
                         else:
                             pass
 
+            #else:
+                #self.extent = [x.iloc[0], x.iloc[-1], y.iloc[0], x.iloc[-1] ]
+
 
             ######
             # get plot indices right
@@ -387,6 +394,14 @@ class Plotter:
 
                 plt.subplot(self.rows, self.cols, index)
                 d = data[key]
+
+                #print(d.index)
+                #print(d)
+
+                # extent indiciduallly or for all graphs
+
+                self.extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
+
 
                 # zoom window coordinates
 
@@ -401,8 +416,9 @@ class Plotter:
                           color='white')
 
                 #fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
-                #fig.text(0.05, 0.45, 'Wavelength / nm', ha='center', rotation='vertical', fontsize=16)
-
+                fig.text(0.05, 0.45, 'Time / s', ha='center', rotation='vertical', fontsize=16)
+                fig.text(0.5, 0.05, 'Wavelength / nm', ha='center', rotation='horizontal', fontsize=16)
+                plt.colorbar()
             plt.show()
         else:
             raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
