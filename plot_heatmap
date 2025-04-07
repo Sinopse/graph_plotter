@@ -1,0 +1,394 @@
+import pandas as pd
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+
+import itertools
+import pathlib
+
+
+# list or dict
+def read_data_csv(file_path):
+
+    data = {}
+
+    if isinstance(file_path, dict):
+        file_path = file_path.values()
+    elif isinstance(file_path, list):
+        pass
+    else:
+        raise TypeError("Wrong type supplied -> only list and dict")
+
+    for num, f in enumerate(file_path, 1):
+        try:
+            df = pd.read_csv(f, skiprows=28, index_col=0, low_memory=False)
+
+            sample_name = f.split('/')[-1]
+            #sample_name = sample_name.split('_')[0]
+
+            df.columns = '0.' + df.columns.str.split('.', n=1).str[-1]
+            df.columns = df.columns.astype(float)
+
+            result = [df.columns[0]]
+            current_value = df.columns[0]
+
+            diff = 0
+            for i in range(1, len(df.columns)):
+                if df.columns[i] < df.columns[i - 1]:
+                    diff = (df.columns[i] + 1 - df.columns[i - 1])
+                    current_value += diff
+                    result.append(current_value)
+                else:
+                    diff = (df.columns[i] - df.columns[i - 1])
+                    current_value += diff
+                    result.append(current_value)
+
+            #print(len(result))
+            df.columns = result
+
+            if sample_name in data.keys():
+                print(f'*** {sample_name} exists ***')
+
+        except Exception as e:
+            if type(e).__name__ == 'EmptyDataError':
+                pass
+            else:
+                pass
+        else:
+            data[sample_name] = df
+
+    return data
+
+def read_data_dat(file_path):
+    dat_data = {}
+
+    if isinstance(file_path, dict):
+        file_path = file_path.values()
+    elif isinstance(file_path, list):
+        pass
+    else:
+        raise TypeError("Wrong type supplied -> only list and dict")
+
+    # Read the data from the file
+    for num, f in enumerate(file_path, 1):
+        try:
+            with open(f, 'r') as file:
+                lines = file.readlines()
+                print(f'*** reading {file} ***')
+                sample_name = f.split('/')[-1]
+
+            FIRSTZ = float(lines[4].split('=')[1].strip())
+            LASTZ = float(lines[5].split('=')[1].strip())
+            DELTAZ = float(lines[6].split('=')[1].strip())
+
+            # Skip the first 11 lines (metadata) and stop at the "END" string
+            data_lines = []
+            for line in lines[11:]:
+                if "END" in line:
+                    break
+                data_lines.append(line.strip())
+
+            #filename = file_path.split(('/'))[-1]
+
+            # Convert the data lines to a NumPy array
+            data = np.array([list(map(float, line.split())) for line in data_lines])
+            # Number of rows and columns in the data
+            num_rows, num_cols = data.shape
+
+            # Generate the time array
+            time_array = np.linspace(0, LASTZ - FIRSTZ, num_cols)  # It sets t0 = 0
+
+            # Extract 5 evenly spaced time stamps
+            time_indices = np.linspace(0, num_cols - 1, 5, dtype=int)
+
+            # Extract the wavelength column (first column)
+            wavelength = data[:, 0]
+
+            df = pd.DataFrame(data, index=wavelength, columns=time_array)
+            dat_data[sample_name] = df
+        except:
+            raise
+
+    return dat_data
+
+class Plotter:
+    def __init__(self, fig_size=(8, 8)):
+        self.x_min = 0
+        self.x_max = 0
+        self.y_min = 0
+        self.y_max = 0
+
+        self.fig_size = fig_size
+        self.grid_spec = None
+        self.rows = 1
+        self.cols = 1
+        self.zoom = {}
+
+    def plot_graph(self):
+        raise NotImplementedError
+
+
+    def plot_layout(self, data, orientation):
+        if isinstance(data, dict):
+            cnt = len(data)
+            print(cnt)
+
+            # orientation
+            if orientation == 'vertical':
+                if cnt == 1:
+                    pass
+                elif cnt == 2:
+                    self.rows = cnt
+                elif cnt > 2 and cnt % 2 == 0:
+                    self.rows = cnt // 2
+                    self.cols = cnt // self.rows
+                else:
+                    self.rows = cnt // 2
+                    self.cols = cnt // self.rows
+                    self.rows += 1
+
+            elif orientation == 'horizontal':
+                if cnt == 1:
+                    pass
+                elif cnt == 2:
+                    self.cols = cnt
+                elif cnt > 2 and cnt % 2 == 0:
+                    self.cols = cnt // 2
+                    self.rows = self.cols // 2
+                else:
+                    self.cols = cnt // 2
+                    self.rows = self.cols - self.rows
+            else:
+                raise ValueError('Orientation not defined: horizontal or vertical')
+
+            # check number of graphs, rows and cols
+            print(f" Number of graphs: {cnt}, "
+                  f" number of rows: {self.rows},"
+                  f" number of columns: {self.cols} \n")
+
+    def plot_heatmap(self, data, orientation,  format, zoom,
+                     xlim=None, ylim=None,
+                             wspace=0,
+                             hspace=0,
+                             fig_size=None):
+
+        self.plot_layout(data, orientation)
+
+        fig, axes = plt.subplots(self.rows, self.cols, figsize=fig_size, sharey=True, sharex=True,
+                                 gridspec_kw={'wspace': wspace,
+                                             'hspace': hspace})
+
+        for (i, ax), key in zip(enumerate(axes.ravel()), data.keys()):
+            d = data[key]
+
+            # mirror dataframe
+            # d = d.iloc[::-1]
+
+            if xlim:
+                ax.set_xlim(xlim)
+
+            if ylim:
+                ax.set_ylim(ylim)
+            else:
+                extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
+                print(extent)
+
+            im = ax.imshow(d,
+                      #extent=extent,
+                      interpolation='nearest',
+                      origin='lower',
+                      aspect='auto',
+                      )
+
+            #fig.colorbar(im, ax=ax)
+
+            # axs parameters
+            ax.set_title(str(key), y=0.8,
+                         loc='center',
+                         color='red')
+
+            plt.tick_params(axis='x', labelsize=20, colors='black')
+            plt.tick_params(axis='y', labelsize=20, colors='black')
+
+            plt.xticks(fontsize=24)
+            plt.yticks(fontsize=24)
+            #plt.colorbar()
+            plt.tight_layout()
+
+        plt.show()
+
+
+    def plot_xy_data(self, data, num_plots=None, xlim=None, ylim=None):
+
+        # gridspec parameters
+        wspace = 0
+        hspace = 0
+
+        fig, axes = plt.subplots(self.rows, self.cols, figsize=self.fig_size, sharey=True, sharex=True,
+                                 gridspec_kw={'wspace': wspace,
+                                              'hspace': hspace})
+
+        for (i, ax), key in zip(enumerate(axes.ravel()), data.keys()):
+            d = data[key]
+
+            if num_plots:
+                time_indices = np.linspace(1, len(d.columns) - 1, num_plots, dtype=int)
+                for j in time_indices:
+                    vals = d.iloc[:, j]
+                    ax.plot(d.index, vals)
+                    ax.set_title(str(key), y=0.8)
+                    ax.axvline(x=777, color="red", linestyle="--", linewidth=2)
+                    ax.set_xlim(500, 900)
+            else:
+                for k in range(len(d.columns)):
+                    ax.plot(d.index, d.iloc[:, k])
+        plt.xlabel('Wavelength')
+        plt.ylabel('Intensity')
+        plt.show()
+
+
+    def plot_gradient(self, data, x1_idx=None, x2_idx=None, num_plots=None, normalize=False, savefig=None, xlim=None, ylim=None):
+        cmap = plt.cm.nipy_spectral
+        # vmin, vmax = 0, 50  # define range of data
+        # mycmap = lambda val: cmap((val - vmin) / (vmax - vmin))
+
+        #colors = [cmap(i / num_plots) for i in range(num_plots)]
+
+        wspace = 0
+        hspace = 0
+
+        fig, axes = plt.subplots(self.rows, self.cols, figsize=self.fig_size, sharey=True, sharex=True,
+                                 gridspec_kw={'wspace': wspace,
+                                              'hspace': hspace})
+
+        # color normalization
+        norm = plt.Normalize(vmin=1, vmax=1)
+
+        if isinstance(axes, np.ndarray):
+            axes = axes.ravel()
+        else:
+            axes = [axes]
+
+        for (i, ax), key in zip(enumerate(axes), data.keys()):
+            d = data[key]
+
+            if num_plots:
+                colors = [cmap(i / num_plots) for i in range(num_plots)]
+                time_indices = np.linspace(1, len(d.columns) - 1, num_plots, dtype=int)
+
+                for index, j in enumerate(time_indices):
+                    vals = d.iloc[:, j]
+
+                    # normalize intensity
+                    if normalize:
+                        vals = (vals - vals.min()) / (vals.max() - vals.min())
+
+                    #color = cmap(norm(np.mean(d.index)))
+                    ax.plot(d.index, vals, color=colors[index])
+                    ax.set_title(str(key), y=0.8)
+                    ax.axvline(x=777, color="red", linestyle="--", linewidth=2)
+
+                    if xlim:
+                        ax.set_xlim(xlim)
+
+                    if ylim:
+                        ax.set_ylim(ylim)
+
+            elif x1_idx or x2_idx:
+                time_indices = np.arange(x1_idx, x2_idx, 1)
+                colors = [cmap(i / (x2_idx - x1_idx)) for i in range((x2_idx - x1_idx))]
+
+                for index, j in enumerate(time_indices):
+                    vals = d.iloc[:, j]
+
+                    # normalize intensity
+                    if normalize:
+                        vals = (vals - vals.min()) / (vals.max() - vals.min())
+
+                    # color = cmap(norm(np.mean(d.index)))
+                    ax.plot(d.index, vals, color=colors[index])
+                    ax.set_title(str(key), y=0.8)
+                    ax.axvline(x=777, color="red", linestyle="--", linewidth=2)
+
+                    if xlim:
+                        ax.set_xlim(xlim)
+
+                    if ylim:
+                        ax.set_ylim(ylim)
+
+            else:
+                for k in range(len(d.columns)):
+                    ax.plot(d.index, d.iloc[:, k])
+
+        plt.xlabel('Wavelength')
+        plt.ylabel('Intensity')
+
+        if savefig:
+            plt.savefig(os.path.join(savefig, f"{savefig.split('/')[-1]}.png"), dpi=600, bbox_inches='tight')
+
+        plt.show()
+
+
+def find_files(directory, file_format):
+    csv_files = {}
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(file_format):
+                csv_files[file] = (os.path.join(root, file))
+    return csv_files
+
+
+pl_data = '/Volumes/DATA/in-situ_PL/2025-03-06'
+#files = find_csv_files('/Volumes/DATA/SDC_Experimente/2025-03-06/2025-03-06/81')
+files = find_files(pl_data, file_format=".csv")
+
+print(files)
+
+data = read_data_csv(files)
+
+for k in data.keys():
+    print(k)
+
+
+# dict key removal
+keys_to_remove = {'23_PL_measurement.csv', '87_run_18_34_88_90_100.csv'}
+data = {k: v for k, v in data.items() if k not in keys_to_remove}
+print("*** Keys after removal ***")
+print(data.keys())
+
+# plot parameters
+kwargs = {
+    'orientation': 'vertical',
+    'format' : 'csv',
+    'fig_size': (10, 10),
+    'zoom': None,
+}
+
+### Normalization
+scaler = MinMaxScaler()
+
+
+P = Plotter()
+P.plot_heatmap(data, xlim=(100, 200), ylim=(500, 1500), **kwargs)
+
+### plot x,y ###
+xy_data = P.plot_xy_data(data, 20)
+pl_xy = P.plot_gradient(data, num_plots=30, normalize=True, ylim=(-0.1, 2), savefig=pl_data)
+P.plot_gradient(data, x1_idx=100, x2_idx=200, normalize=True, ylim=(-0.1, 2))
+
+### Reflectance data 06.03.2025 ###
+#reflectance = '/Volumes/DATA/SDC_Experimente/2025-03-06/6'
+#reflectance_data_files = find_files(reflectance, file_format=".dat")
+#print(reflectance_data_files)
+
+#data = read_data_dat(reflectance_data_files)
+#r = Plotter.plot_heatmap(data, **kwargs)
+#r_xy = P.plot_gradient(data, num_plots=50, savefig=reflectance)
+
+
+### 28.03. Data for curve fitting
+# file_path = '/Volumes/DATA/SDC_Experimente/2025-03-06/6/RUN@18.16.23/'
+# run_18_16 = find_files(file_path, file_format=".dat")
+# run_18_16_dat = read_data_dat(run_18_16)
+# run_18_16_xy = P.plot_gradient(run_18_16_dat, num_plots=10)
