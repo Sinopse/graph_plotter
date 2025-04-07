@@ -116,13 +116,13 @@ class DataFormatter:
                 #print(data)
 
                 # clean-up
-                del dataframe #??? needed here?
-                del _data
-                del _time_data
-                del np_array
-                del t_index
-                del w_index
-                gc.collect()
+                #del dataframe #??? needed here?
+                #del _data
+                #del _time_data
+                #del np_array
+                #del t_index
+                #del w_index
+                #gc.collect()
         else:
             raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
         return data.__dict__['_data']
@@ -148,12 +148,18 @@ class Reader(DataFormatter):
     def read_dat(self, file, *args, **kwargs):
 
         if isinstance(file, dict):
-            for key, value in file.items():
-                _file = pd.read_csv(value, skiprows=11, sep='\s+', header=None, skipfooter=1, engine='python')
-                self._data[key] = _file
 
-                _time_data = pd.read_csv(value, sep='\s+', low_memory=False, nrows=6, header=None)
-                self._time_data[key] = _time_data
+            for key, value in file.items():
+                print(f"*** reading {key} ***")
+                try:
+                    _file = pd.read_csv(value, skiprows=11, sep='\s+', header=None, skipfooter=1, engine='python')
+                    self._data[key] = _file
+
+                    _time_data = pd.read_csv(value, sep='\s+', low_memory=False, nrows=6, header=None)
+                    self._time_data[key] = _time_data
+                except UnicodeDecodeError:
+                    pass
+
 
 
         elif isinstance(file, str):
@@ -173,28 +179,29 @@ class Reader(DataFormatter):
     # 28.11.2023 this func will be deprecated in near future
     # PL data from In-Situ PL setup
     def read_csv(self, files):
-        if isinstance(files, list):
-            for num, f in enumerate(files, 1):
-                try:
-                    _f = pd.read_csv(f, skiprows=28, header=None, low_memory=False)
-
-                    # retrieve sample names -> first implementation, consider a defaultdict?
-                    # data management -> sample name, composition, etc.
-
-                    sample_name = self.get_sample_name(f)
-                    if sample_name in self._data.keys():
-                        print(f'*** {sample_name} exists ***')
-
-                except Exception as e:
-                    if type(e).__name__ == 'EmptyDataError':
-                        pass
-                    else:
-                        raise
-                else:
-                    self._data[sample_name] = _f
+        if isinstance(files, dict):
+            files = files.values()
         else:
-            raise TypeError("Wrong type supplied -> dict")
-        return self._data
+            raise TypeError("Wrong type supplied -> only list and dict")
+
+        for num, f in enumerate(files, 1):
+            try:
+                _f = pd.read_csv(f, skiprows=28, header=None, low_memory=False)
+
+                sample_name = self.get_sample_name(f)
+                if sample_name in self._data.keys():
+                    print(f'*** {sample_name} exists ***')
+
+            except Exception as e:
+                if type(e).__name__ == 'EmptyDataError':
+                    pass
+                else:
+                    raise
+            else:
+                self._data[sample_name] = _f
+
+            return self._data
+
 
     def get_min_max_vals(self):
         _vals_list = []
@@ -240,6 +247,8 @@ class Reader(DataFormatter):
             print(v)
             print(type(v))
 
+
+plt.close(fig='all')
 
 class Plotter:
     def __init__(self, fig_size=(8, 8)):
@@ -391,7 +400,7 @@ class Plotter:
 
                         idxs = [x1_idx, x2_idx, y1_idx, y2_idx]
                         # print(x1_idx, x2_idx)
-                        # print("y1: ", y1_idx, "y2: ", y2_idx)
+                        print("y1: ", y1_idx, "y2: ", y2_idx)
                         # print('lower limit', row - y1_idx)
                         #print(f'indices: y2 = {y2_idx}, y1 = {row - y1_idx} \n')
 
@@ -435,6 +444,7 @@ class Plotter:
 
                 # extent individually or for all graph
                 self.extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
+                #self.extent = (d.columns[0], d.columns[-1], zoom[2], zoom[3])
                 print(self.extent)
 
 
@@ -442,26 +452,31 @@ class Plotter:
 
                 plt.imshow(d,
                            extent=self.extent,
-                           #interpolation='nearest',
+                           interpolation='nearest',
                            origin='upper',
-                           aspect='auto')
+                           aspect='auto',
+                           )
 
                 #axes[index].set_ylim(d.index[0], d.index[-1])
 
-                plt.title(str(key), y=1,
+                plt.title(str(key), y=0.8,
                           loc='center',
-                          color='black')
+                          color='red')
 
                 #fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
-                fig.text(0.05, 0.45, 'Time / s', ha='center', rotation='vertical', fontsize=24)
                 fig.text(0.5, 0.05, 'Wavelength / nm', ha='center', rotation='horizontal', fontsize=24)
-                plt.tick_params(axis='x', labelsize=14, colors='black')
-                plt.tick_params(axis='y', labelsize=14, colors='black')
+                fig.text(0.05, 0.45, 'Time / s', ha='center', rotation='vertical', fontsize=24)
+                #plt.xlabel('Wavelength /  [nm]', fontsize=24)
+                #plt.ylabel('Time / s', fontsize=24)
+
+                plt.tick_params(axis='x', labelsize=20, colors='black')
+                plt.tick_params(axis='y', labelsize=20, colors='black')
+
+                #plt.xticks(fontsize=24)
+                #plt.yticks(fontsize=24)
                 #plt.colorbar()
             plt.show()
         else:
             raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
-
-plt.close(fig='all')
 
 # check difference 
