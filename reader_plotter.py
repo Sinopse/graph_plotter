@@ -56,8 +56,6 @@ class DataFormatter:
         if isinstance(data, Reader):
             if hasattr(data, '_data') and hasattr(data, '_time_data'):
                 for key, dataframe in data.__dict__['_data'].items():
-                    row, col = dataframe.shape
-                    print(f'row: {row} \ncol: {col}\n')
 
                     # time Series
                     if key in data.__dict__['_time_data']:
@@ -66,7 +64,15 @@ class DataFormatter:
                         time = pd.Series(time_stamps, dtype='float')
 
                     wavelength = dataframe.iloc[:, 0]
-                    del dataframe[0]
+
+                    try:
+                        del dataframe[0]
+                    except KeyError:
+                        pass
+
+                    np_array = dataframe.to_numpy()
+                    row, col = np_array.shape   # shape of a numpy array
+                    print(f'row: {row} \ncol: {col}\n')
 
                     # new wavelength index
                     w_index = pd.Series(wavelength, name='wavelength', dtype='float')
@@ -74,27 +80,28 @@ class DataFormatter:
                     # time stamps from measurement data
                     t_min, t_max, t_delta = time
                     print(t_min, t_max, t_delta)
-                    new_delta = (t_max - t_min) / (col - 1) # minus the first columns with wavelength vals
+                    new_delta = (t_max - t_min) / col # minus the first columns with wavelength vals
                     new_delta = round(new_delta, 10)
-                    print('calculated: ', new_delta)
+                    print('calculated new_delta: ', new_delta)
 
                     # calculate each time
                     new_time = t_min
                     cnt = 0
                     time_lst = []
-                    #while t_min + new_delta <= t_max + new_delta:
-                    #while new_time + new_delta <= t_max + new_delta:
-                    while cnt != col - 1:
+
+                    while cnt != col:
                         time_lst.append(round(new_time, 4))
                         cnt += 1
                         new_time += new_delta
 
+                   # check if number of col == len(lime_lst)
+                    if col == len(time_lst):
+                        pass
+                    else:
+                        raise("Number of col is different to the calculated time list")
+
                     # new time index
                     t_index = pd.Series(time_lst, name='time', dtype='float')
-                    #t_index.sort_values(ascending=False)
-
-                    # DataFrame to array
-                    np_array = dataframe.to_numpy()
 
                     # custom array rotation if needed
                     _data = pd.DataFrame(np_array, index=w_index, columns=t_index)
@@ -109,13 +116,13 @@ class DataFormatter:
                 #print(data)
 
                 # clean-up
-                del dataframe #??? needed here?
-                del _data
-                del _time_data
-                del np_array
-                del t_index
-                del w_index
-                gc.collect()
+                #del dataframe #??? needed here?
+                #del _data
+                #del _time_data
+                #del np_array
+                #del t_index
+                #del w_index
+                #gc.collect()
         else:
             raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
         return data.__dict__['_data']
@@ -139,8 +146,26 @@ class Reader(DataFormatter):
         pass
 
     def read_dat(self, file, *args, **kwargs):
-        if isinstance(file, str):
+
+        if isinstance(file, dict):
+
+            for key, value in file.items():
+                print(f"*** reading {key} ***")
+                try:
+                    _file = pd.read_csv(value, skiprows=11, sep='\s+', header=None, skipfooter=1, engine='python')
+                    self._data[key] = _file
+
+                    _time_data = pd.read_csv(value, sep='\s+', low_memory=False, nrows=6, header=None)
+                    self._time_data[key] = _time_data
+                except UnicodeDecodeError:
+                    pass
+
+
+
+        elif isinstance(file, str):
             sample_name = file.split(sep='/')[-1]  # sample name
+
+
             _file = pd.read_csv(file, skiprows=11, sep='\s+', header=None, skipfooter=1, engine='python')
             self._data[sample_name] = _file
 
@@ -148,34 +173,35 @@ class Reader(DataFormatter):
             self._time_data[sample_name] = _time_data
 
         else:
-            raise TypeError("Not a path")
+            raise TypeError("Not a path or a dictionary")
         return self
 
     # 28.11.2023 this func will be deprecated in near future
     # PL data from In-Situ PL setup
     def read_csv(self, files):
-        if isinstance(files, list):
-            for num, f in enumerate(files, 1):
-                try:
-                    _f = pd.read_csv(f, skiprows=28, header=None, low_memory=False)
-
-                    # retrieve sample names -> first implementation, consider a defaultdict?
-                    # data management -> sample name, composition, etc.
-
-                    sample_name = self.get_sample_name(f)
-                    if sample_name in self._data.keys():
-                        print(f'*** {sample_name} exists ***')
-
-                except Exception as e:
-                    if type(e).__name__ == 'EmptyDataError':
-                        pass
-                    else:
-                        raise
-                else:
-                    self._data[sample_name] = _f
+        if isinstance(files, dict):
+            files = files.values()
         else:
-            raise TypeError("Wrong type supplied -> dict")
-        return self._data
+            raise TypeError("Wrong type supplied -> only list and dict")
+
+        for num, f in enumerate(files, 1):
+            try:
+                _f = pd.read_csv(f, skiprows=28, header=None, low_memory=False)
+
+                sample_name = self.get_sample_name(f)
+                if sample_name in self._data.keys():
+                    print(f'*** {sample_name} exists ***')
+
+            except Exception as e:
+                if type(e).__name__ == 'EmptyDataError':
+                    pass
+                else:
+                    raise
+            else:
+                self._data[sample_name] = _f
+
+            return self._data
+
 
     def get_min_max_vals(self):
         _vals_list = []
@@ -222,6 +248,8 @@ class Reader(DataFormatter):
             print(type(v))
 
 
+plt.close(fig='all')
+
 class Plotter:
     def __init__(self, fig_size=(8, 8)):
         self.fig_size = fig_size
@@ -250,6 +278,8 @@ class Plotter:
     # grid_spec derived from the number of dictionary keys in your data
 
     def plot_heatmap(self, data, axes, orientation, format, zoom, min_max_vals=None,
+                     wspace=0,
+                     hspace=0,
                      x=0,
                      y=0,
                      # zoom=None,
@@ -261,6 +291,7 @@ class Plotter:
             cnt = len(data)
             print(cnt)
 
+            # orientation
             if orientation == 'vertical':
                 if cnt == 1:
                     pass
@@ -268,7 +299,7 @@ class Plotter:
                     self.rows = cnt
                 elif cnt > 2 and cnt % 2 == 0:
                     self.rows = cnt // 2
-                    self.cols = self.rows // 2
+                    self.cols = cnt // self.rows
                 else:
                     self.rows = cnt // 2
                     self.cols = cnt // self.rows
@@ -289,7 +320,9 @@ class Plotter:
                 raise ValueError('Orientation not defined: horizontal or vertical')
 
             # check number of graphs, rows and cols
-            print(cnt, self.rows, self.cols)
+            print(f" Number of graphs: {cnt}, "
+                  f" number of rows: {self.rows},"
+                  f" number of columns: {self.cols} \n")
 
             # assign x, y axs
             if isinstance(axes, dict) and not None: # x and y cant be = 0!
@@ -307,10 +340,13 @@ class Plotter:
                 max_val = max(min_max_vals_unpacked)
                 # print(min_max_vals_unpacked)
 
-            fig = plt.figure(figsize=self.fig_size)
-            gs = fig.add_gridspec(nrows=self.rows, ncols=self.cols, hspace=0, wspace=0)
-            axs = gs.subplots(sharex=True, sharey=True)
 
+            ### plot params ###
+            fig, axes = plt.subplots(self.rows, self.cols, figsize=self.fig_size, sharey=True, sharex=True,
+                                     gridspec_kw={'wspace': wspace,
+                                                  'hspace': hspace})
+
+            ### zoom options
             if zoom:
                 for index, key in enumerate(data.keys(), 1):
                     d = data[key]
@@ -322,6 +358,8 @@ class Plotter:
                         # bounding box that the image will fill
                         # -> coincides with the axes units
                         self.extent = (x1, x2, y1, y2)
+                        print(x1, x2)
+                        print(y1, y2)
 
                         # assign axis from DataFrame
                         y = [i for i in d.index]
@@ -362,9 +400,9 @@ class Plotter:
 
                         idxs = [x1_idx, x2_idx, y1_idx, y2_idx]
                         # print(x1_idx, x2_idx)
-                        # print("y1: ", y1_idx, "y2: ", y2_idx)
+                        print("y1: ", y1_idx, "y2: ", y2_idx)
                         # print('lower limit', row - y1_idx)
-                        # print(f'indices: y2 = {y2_idx}, y1 = {row - y1_idx} \n')
+                        #print(f'indices: y2 = {y2_idx}, y1 = {row - y1_idx} \n')
 
                         # slice of the DataFrame for zoom
 
@@ -377,16 +415,38 @@ class Plotter:
                         else:
                             pass
 
+            # else:
+            #     min_index = float('inf')  # Initialize with infinity
+            #     max_index = None
+            #
+            #     for d in data.values():
+            #         if not d.empty:
+            #             min_index = min(min_index, d.index.min())
+            #
+            #         current_max_index = d.index.max()
+            #         if current_max_index is not None:  # Check if DataFrame has non-null index
+            #             if max_index is None or current_max_index > max_index:
+            #                 max_index = current_max_index
+            #
+            #         #self.extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
+            #         self.extent = (d.columns[0], d.columns[-1], min_index, max_index)
+            #     print(min_index, max_index)
 
-            ######
+            #####
             # get plot indices right
             # original line
             for index, key in enumerate(data.keys(), 1):
                 # for index, key, ax in zip(data, data.keys(), axs.flat):
                 # select dataframe with key
-
                 plt.subplot(self.rows, self.cols, index)
+
                 d = data[key]
+
+                # extent individually or for all graph
+                self.extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
+                #self.extent = (d.columns[0], d.columns[-1], zoom[2], zoom[3])
+                print(self.extent)
+
 
                 # zoom window coordinates
 
@@ -394,19 +454,29 @@ class Plotter:
                            extent=self.extent,
                            interpolation='nearest',
                            origin='upper',
-                           aspect='auto')
+                           aspect='auto',
+                           )
+
+                #axes[index].set_ylim(d.index[0], d.index[-1])
 
                 plt.title(str(key), y=0.8,
-                          loc='left',
-                          color='white')
+                          loc='center',
+                          color='red')
 
                 #fig.text(0.5, 0.05, 'Time / s', ha='center', fontsize=16)
-                #fig.text(0.05, 0.45, 'Wavelength / nm', ha='center', rotation='vertical', fontsize=16)
+                fig.text(0.5, 0.05, 'Wavelength / nm', ha='center', rotation='horizontal', fontsize=24)
+                fig.text(0.05, 0.45, 'Time / s', ha='center', rotation='vertical', fontsize=24)
+                #plt.xlabel('Wavelength /  [nm]', fontsize=24)
+                #plt.ylabel('Time / s', fontsize=24)
 
+                plt.tick_params(axis='x', labelsize=20, colors='black')
+                plt.tick_params(axis='y', labelsize=20, colors='black')
+
+                #plt.xticks(fontsize=24)
+                #plt.yticks(fontsize=24)
+                #plt.colorbar()
             plt.show()
         else:
             raise TypeError(f"Wrong type supplied -> dict, supplied: {type(data)}")
-
-plt.close(fig='all')
 
 # check difference 
