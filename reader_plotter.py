@@ -63,6 +63,11 @@ class DataFormatter:
                         time_stamps = _time_data.iloc[3:6, 2]
                         time = pd.Series(time_stamps, dtype='float')
 
+                        # first = time_stamps[0]
+                        # second = time_stamps[1]
+                        # third = time_stamps[2]
+                        # print(first, second, third)
+
                     wavelength = dataframe.iloc[:, 0]
 
                     try:
@@ -79,29 +84,35 @@ class DataFormatter:
 
                     # time stamps from measurement data
                     t_min, t_max, t_delta = time
-                    print(t_min, t_max, t_delta)
-                    new_delta = (t_max - t_min) / col # minus the first columns with wavelength vals
-                    new_delta = round(new_delta, 10)
-                    print('calculated new_delta: ', new_delta)
 
-                    # calculate each time
-                    new_time = t_min
-                    cnt = 0
-                    time_lst = []
+                    # old implementation 15.04.2025
+                   #  print(t_min, t_max, t_delta)
+                   #  new_delta = (t_max - t_min) / col # minus the first columns with wavelength vals
+                   #  new_delta = round(new_delta, 10)
+                   #  print('calculated new_delta: ', new_delta)
+                   #
+                   #  # calculate each time
+                   #  new_time = t_min
+                   #  cnt = 0
+                   #  time_lst = []
+                   #
+                   #  while cnt != col:
+                   #      time_lst.append(round(new_time, 4))
+                   #      cnt += 1
+                   #      new_time += new_delta
+                   #
+                   # # check if number of col == len(lime_lst)
+                   #  if col == len(time_lst):
+                   #      pass
+                   #  else:
+                   #      raise("Number of col is different to the calculated time list")
 
-                    while cnt != col:
-                        time_lst.append(round(new_time, 4))
-                        cnt += 1
-                        new_time += new_delta
-
-                   # check if number of col == len(lime_lst)
-                    if col == len(time_lst):
-                        pass
-                    else:
-                        raise("Number of col is different to the calculated time list")
+                    # new implementation
+                    time_array = np.linspace(t_min, t_max, col)  # It sets t0 = 0
 
                     # new time index
-                    t_index = pd.Series(time_lst, name='time', dtype='float')
+                    #t_index = pd.Series(time_lst, name='time', dtype='float')
+                    t_index = pd.Series(time_array, name='time', dtype='float')
 
                     # custom array rotation if needed
                     _data = pd.DataFrame(np_array, index=w_index, columns=t_index)

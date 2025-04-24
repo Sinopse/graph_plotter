@@ -2,6 +2,8 @@ import pathlib
 
 import reader_plotter as rd
 
+from plot_heatmap import read_data_dat
+
 #path = pathlib.Path('/Users/alexander/Desktop/HZB_UV_vis_Laytec/PL_data/2023_11_30')
 #path = pathlib.Path('/Users/alexander/Documents/HZB Arbeit/Messungen/in-situ_PL/Data/2023-11-9')
 
@@ -97,7 +99,7 @@ Reader = rd.Reader()
 #folder_21_08 = '/Volumes/DATA/SDC_Experimente/2025-03-06/6'
 
 
-folder_21_08 ='/Volumes/DATA/SDC_Experimente/2025-03-06/6' # PL data 6.03.2025
+#folder_21_08 ='/Volumes/DATA/SDC_Experimente/2025-03-06/6' # PL data 6.03.2025
 
 
 ### aBOMA PL test ###
@@ -111,6 +113,7 @@ folder_21_08 ='/Volumes/DATA/SDC_Experimente/2025-03-06/6' # PL data 6.03.2025
 ### use this when folder
 
 #read_06_05 = Reader.read_dat(data_06_05_24)
+#read_06_05 = read_data_dat(data_06_05_24) # using new module 15.04.2025
 
 
 ### use this when single spectra ###
@@ -120,7 +123,6 @@ folder_21_08 ='/Volumes/DATA/SDC_Experimente/2025-03-06/6' # PL data 6.03.2025
 read_06_05 = Reader.read_dat('/Volumes/DATA/SDC_Experimente/2025-03-06/6/RUN@20.05.46/run_20_05_22_30_100_15s.dat')
 
 formatted = Reader.format_dat(read_06_05, flip=True)
-
 
 data_dict = {}
 for key, value in formatted.items():

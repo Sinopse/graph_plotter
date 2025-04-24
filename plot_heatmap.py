@@ -1,16 +1,17 @@
-import pandas as pd
+import math
 import os
-import numpy as np
+
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
-import itertools
-import pathlib
-
+import reader_plotter as rd
 
 # list or dict
-def read_data_csv(file_path):
-
+def read_data_csv(file_path, save=False):
     data = {}
 
     if isinstance(file_path, dict):
@@ -25,7 +26,7 @@ def read_data_csv(file_path):
             df = pd.read_csv(f, skiprows=28, index_col=0, low_memory=False)
 
             sample_name = f.split('/')[-1]
-            #sample_name = sample_name.split('_')[0]
+            # sample_name = sample_name.split('_')[0]
 
             df.columns = '0.' + df.columns.str.split('.', n=1).str[-1]
             df.columns = df.columns.astype(float)
@@ -44,8 +45,11 @@ def read_data_csv(file_path):
                     current_value += diff
                     result.append(current_value)
 
-            #print(len(result))
+            # print(len(result))
             df.columns = result
+
+            if save:
+                df.to_csv(f'{sample_name}')
 
             if sample_name in data.keys():
                 print(f'*** {sample_name} exists ***')
@@ -60,6 +64,7 @@ def read_data_csv(file_path):
 
     return data
 
+
 def read_data_dat(file_path):
     dat_data = {}
 
@@ -68,7 +73,8 @@ def read_data_dat(file_path):
     elif isinstance(file_path, list):
         pass
     else:
-        raise TypeError("Wrong type supplied -> only list and dict")
+        #raise TypeError("Wrong type supplied -> only list and dict")
+        file_path = [file_path]
 
     # Read the data from the file
     for num, f in enumerate(file_path, 1):
@@ -89,28 +95,36 @@ def read_data_dat(file_path):
                     break
                 data_lines.append(line.strip())
 
-            #filename = file_path.split(('/'))[-1]
+            # filename = file_path.split(('/'))[-1]
 
             # Convert the data lines to a NumPy array
             data = np.array([list(map(float, line.split())) for line in data_lines])
+
             # Number of rows and columns in the data
             num_rows, num_cols = data.shape
 
             # Generate the time array
-            time_array = np.linspace(0, LASTZ - FIRSTZ, num_cols)  # It sets t0 = 0
+            time_array = np.linspace(FIRSTZ, LASTZ, num_cols)  # It sets t0 = 0
+            time = pd.Series(time_array, name="Time", dtype="float")
+            time = time.round(4)
 
             # Extract 5 evenly spaced time stamps
-            time_indices = np.linspace(0, num_cols - 1, 5, dtype=int)
+            # time_indices = np.linspace(0, num_cols - 1, 5, dtype=int)
 
             # Extract the wavelength column (first column)
-            wavelength = data[:, 0]
+            wavelength_array = data[:, 0]
+            wavelength = pd.Series(wavelength_array, name="Wavelength", dtype="float")
 
-            df = pd.DataFrame(data, index=wavelength, columns=time_array)
+            data = np.rot90(data)
+
+            df = pd.DataFrame(data, index=time, columns=wavelength)
+            # df = df.iloc[::-1]
             dat_data[sample_name] = df
         except:
             raise
 
     return dat_data
+
 
 class Plotter:
     def __init__(self, fig_size=(8, 8)):
@@ -125,99 +139,69 @@ class Plotter:
         self.cols = 1
         self.zoom = {}
 
-    def plot_graph(self):
-        raise NotImplementedError
+    def plot_heatmap(self, data, orientation, format, zoom,
+                     xlim=None, ylim=None, normalize=False,
+                     wspace=0,
+                     hspace=0,
+                     fig_size=None):
 
+        cnt = len(data)
 
-    def plot_layout(self, data, orientation):
         if isinstance(data, dict):
-            cnt = len(data)
-            print(cnt)
-
-            # orientation
-            if orientation == 'vertical':
-                if cnt == 1:
-                    pass
-                elif cnt == 2:
-                    self.rows = cnt
-                elif cnt > 2 and cnt % 2 == 0:
-                    self.rows = cnt // 2
-                    self.cols = cnt // self.rows
-                else:
-                    self.rows = cnt // 2
-                    self.cols = cnt // self.rows
-                    self.rows += 1
-
-            elif orientation == 'horizontal':
-                if cnt == 1:
-                    pass
-                elif cnt == 2:
-                    self.cols = cnt
-                elif cnt > 2 and cnt % 2 == 0:
-                    self.cols = cnt // 2
-                    self.rows = self.cols // 2
-                else:
-                    self.cols = cnt // 2
-                    self.rows = self.cols - self.rows
-            else:
-                raise ValueError('Orientation not defined: horizontal or vertical')
+            self.cols = math.ceil(math.sqrt(cnt))
+            self.rows = math.ceil(cnt / self.cols)
 
             # check number of graphs, rows and cols
             print(f" Number of graphs: {cnt}, "
                   f" number of rows: {self.rows},"
                   f" number of columns: {self.cols} \n")
 
-    def plot_heatmap(self, data, orientation,  format, zoom,
-                     xlim=None, ylim=None,
-                             wspace=0,
-                             hspace=0,
-                             fig_size=None):
-
-        self.plot_layout(data, orientation)
-
         fig, axes = plt.subplots(self.rows, self.cols, figsize=fig_size, sharey=True, sharex=True,
                                  gridspec_kw={'wspace': wspace,
-                                             'hspace': hspace})
+                                              'hspace': hspace})
+        if not isinstance(data, dict):
+            data = {'key': data}
 
-        for (i, ax), key in zip(enumerate(axes.ravel()), data.keys()):
+        if isinstance(axes, np.ndarray):
+            axes = axes.ravel()
+        else:
+            axes = [axes]
+
+        for (i, ax), key in zip(enumerate(axes), data.keys()):
             d = data[key]
 
-            # mirror dataframe
-            # d = d.iloc[::-1]
+            if normalize:
+                d = (d - d.min()) / (d.max() - d.min())
+
+            extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
+            print(extent)
+
+            ax.imshow(d,
+                      extent=extent,
+                      cmap='magma',
+                      interpolation='nearest',
+                      origin='lower',
+                      aspect='auto')
 
             if xlim:
                 ax.set_xlim(xlim)
 
             if ylim:
                 ax.set_ylim(ylim)
-            else:
-                extent = (d.columns[0], d.columns[-1], d.index[0], d.index[-1])
-                print(extent)
 
-            im = ax.imshow(d,
-                      #extent=extent,
-                      interpolation='nearest',
-                      origin='lower',
-                      aspect='auto',
-                      )
-
-            #fig.colorbar(im, ax=ax)
+            columns = d.columns.tolist()
+            index = d.index.tolist()
 
             # axs parameters
-            ax.set_title(str(key), y=0.8,
+            ax.set_title(str(key), y=0.9,
                          loc='center',
                          color='red')
 
-            plt.tick_params(axis='x', labelsize=20, colors='black')
-            plt.tick_params(axis='y', labelsize=20, colors='black')
+        for i in range(cnt, self.rows * self.cols):
+            axes.flat[i].axis('off')
 
-            plt.xticks(fontsize=24)
-            plt.yticks(fontsize=24)
-            #plt.colorbar()
-            plt.tight_layout()
-
+        plt.tight_layout()
         plt.show()
-
 
     def plot_xy_data(self, data, num_plots=None, xlim=None, ylim=None):
 
@@ -247,13 +231,14 @@ class Plotter:
         plt.ylabel('Intensity')
         plt.show()
 
+    def plot_gradient(self, data, x1_idx=None, x2_idx=None, num_plots=None,
+                      normalize=False, normalize_columns=False, savefig=None,
+                      xlim=None, ylim=None,
+                      colorbar=False):
 
-    def plot_gradient(self, data, x1_idx=None, x2_idx=None, num_plots=None, normalize=False, savefig=None, xlim=None, ylim=None):
-        cmap = plt.cm.nipy_spectral
-        # vmin, vmax = 0, 50  # define range of data
-        # mycmap = lambda val: cmap((val - vmin) / (vmax - vmin))
-
-        #colors = [cmap(i / num_plots) for i in range(num_plots)]
+        cnt = len(data)
+        self.cols = math.ceil(math.sqrt(cnt))
+        self.rows = math.ceil(cnt / self.cols)
 
         wspace = 0
         hspace = 0
@@ -262,8 +247,10 @@ class Plotter:
                                  gridspec_kw={'wspace': wspace,
                                               'hspace': hspace})
 
-        # color normalization
-        norm = plt.Normalize(vmin=1, vmax=1)
+        # colormap definition
+        cmap = plt.cm.nipy_spectral
+        norm = plt.Normalize(vmin=1, vmax=num_plots - 1)
+        colors = cmap(norm(range(num_plots)))
 
         if isinstance(axes, np.ndarray):
             axes = axes.ravel()
@@ -273,21 +260,26 @@ class Plotter:
         for (i, ax), key in zip(enumerate(axes), data.keys()):
             d = data[key]
 
+            if normalize:
+                d = (d - d.min().min()) / (d.max().max() - d.min().min())
+
             if num_plots:
-                colors = [cmap(i / num_plots) for i in range(num_plots)]
+                #colors = [cmap(i / num_plots) for i in range(num_plots)]
                 time_indices = np.linspace(1, len(d.columns) - 1, num_plots, dtype=int)
 
                 for index, j in enumerate(time_indices):
                     vals = d.iloc[:, j]
 
                     # normalize intensity
-                    if normalize:
+
+                    if normalize_columns:
                         vals = (vals - vals.min()) / (vals.max() - vals.min())
 
-                    #color = cmap(norm(np.mean(d.index)))
+                    # color = cmap(norm(np.mean(d.index)))
                     ax.plot(d.index, vals, color=colors[index])
-                    ax.set_title(str(key), y=0.8)
+                    ax.set_title(str(key), y=0.9)
                     ax.axvline(x=777, color="red", linestyle="--", linewidth=2)
+
 
                     if xlim:
                         ax.set_xlim(xlim)
@@ -321,12 +313,23 @@ class Plotter:
                 for k in range(len(d.columns)):
                     ax.plot(d.index, d.iloc[:, k])
 
-        plt.xlabel('Wavelength')
-        plt.ylabel('Intensity')
+        # Colorbar
+        if colorbar:
+            for ax in axes:
+                sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm, ax=ax)
+
+
+        for i in range(cnt, self.rows * self.cols):
+            axes.flat[i].axis('off')
 
         if savefig:
             plt.savefig(os.path.join(savefig, f"{savefig.split('/')[-1]}.png"), dpi=600, bbox_inches='tight')
 
+        plt.xlabel('Wavelength')
+        plt.ylabel('Intensity')
+        plt.tight_layout()
         plt.show()
 
 
@@ -340,16 +343,15 @@ def find_files(directory, file_format):
 
 
 pl_data = '/Volumes/DATA/in-situ_PL/2025-03-06'
-#files = find_csv_files('/Volumes/DATA/SDC_Experimente/2025-03-06/2025-03-06/81')
+# files = find_csv_files('/Volumes/DATA/SDC_Experimente/2025-03-06/2025-03-06/81')
 files = find_files(pl_data, file_format=".csv")
 
 print(files)
 
-data = read_data_csv(files)
+data = read_data_csv(files, save=True)
 
 for k in data.keys():
     print(k)
-
 
 # dict key removal
 keys_to_remove = {'23_PL_measurement.csv', '87_run_18_34_88_90_100.csv'}
@@ -360,7 +362,7 @@ print(data.keys())
 # plot parameters
 kwargs = {
     'orientation': 'vertical',
-    'format' : 'csv',
+    'format': 'csv',
     'fig_size': (10, 10),
     'zoom': None,
 }
@@ -368,27 +370,92 @@ kwargs = {
 ### Normalization
 scaler = MinMaxScaler()
 
-
 P = Plotter()
 P.plot_heatmap(data, xlim=(100, 200), ylim=(500, 1500), **kwargs)
 
 ### plot x,y ###
 xy_data = P.plot_xy_data(data, 20)
-pl_xy = P.plot_gradient(data, num_plots=30, normalize=True, ylim=(-0.1, 2), savefig=pl_data)
-P.plot_gradient(data, x1_idx=100, x2_idx=200, normalize=True, ylim=(-0.1, 2))
+pl_xy = P.plot_gradient(data, num_plots=30, normalize=True, ylim=(-0.1, 2))
+P.plot_gradient(data, x1_idx=100, x2_idx=200, ylim=(0, 1000))
+
+### slice df based on intensity threshold
+threshold = 800
+
+
+def slice_threshold(data, threshold, normalize=False):
+    df_slice = {}
+
+    if isinstance(data, dict):
+        for k, d in data.items():
+            if normalize:
+                d = (d - d.min()) / (d.max() - d.min())
+
+            for i, col in enumerate(d.columns):
+                # if d[col].max() > threshold:
+                if threshold < d[col].mean():
+                    d = d.iloc[:, i:]
+                    df_slice[k] = d
+                    break
+    return df_slice
+
+
+def normalize_start_point(data_dict, idx_list=None, sample_list=None):
+    df_dict_norm = {}
+
+    for key in data_dict.keys():
+        d = data_dict.get(key)
+        start = d.columns[0]
+        d.columns = d.columns.to_series().apply(lambda x: x - start)
+        df_dict_norm[key] = d
+
+    return df_dict_norm
+
+
+sliced_data = slice_threshold(data, threshold=90)
+P.plot_gradient(sliced_data, x1_idx=0, x2_idx=200)
+P.plot_heatmap(data, **kwargs)
+P.plot_heatmap(sliced_data, normalize=False, **kwargs)
+
+delay_keys = {'23_run_20_05_22_30_100_15s.csv', '93_run_19_34_94_30_100_5s.csv', '95_run_19_51_96_30_100_10s.csv'}
+no_delay = {k: v for k, v in data.items() if k not in delay_keys}
+
+no_delay_sliced = slice_threshold(no_delay, threshold=90)
+#
+# ### run91 slice
+no_delay_sliced_run91 = slice_threshold(no_delay, threshold=150)
+run91 = no_delay_sliced_run91.get('91_run_19_14_92_90_100.csv')
+no_delay_sliced['91_run_19_14_92_90_100.csv'] = run91
+no_delay_sliced_norm_start = normalize_start_point(no_delay_sliced)
+#
+# # P.plot_heatmap(k, normalize=False, **kwargs)
+P.plot_heatmap(no_delay_sliced, xlim=(0, 300), ylim=(800, 1500), normalize=False, **kwargs)
+#
+delay = {k: v for k, v in data.items() if k in delay_keys}
+delay_sliced = {k: v for k, v in data.items() if k in delay_keys}
+#delay_sliced = slice_threshold(delay_sliced, threshold=90)
+P.plot_heatmap(delay_sliced, xlim=(0, 300), ylim=(800, 1500), normalize=False, **kwargs)
+
+P.plot_gradient(sliced_df, x1_idx=0, x2_idx=400)
+# P.plot_heatmap(sliced_df, xlim=(0, 400), ylim=(500, 1500), **kwargs)
 
 ### Reflectance data 06.03.2025 ###
-#reflectance = '/Volumes/DATA/SDC_Experimente/2025-03-06/6'
-#reflectance_data_files = find_files(reflectance, file_format=".dat")
-#print(reflectance_data_files)
-
-#data = read_data_dat(reflectance_data_files)
-#r = Plotter.plot_heatmap(data, **kwargs)
-#r_xy = P.plot_gradient(data, num_plots=50, savefig=reflectance)
+# reflectance = '/Volumes/DATA/SDC_Experimente/2025-03-06/6/RUN@18.16.23/'
+# # reflectance = '/Volumes/DATA/SDC_Experimente/2025-03-06/6'
+# reflectance_data_files = find_files(reflectance, file_format=".dat")
+# print(reflectance_data_files)
+#
+# rdata = read_data_dat(reflectance_data_files)
+# P = Plotter()
+# P.plot_heatmap(rdata, **kwargs)
+# # r_xy = P.plot_gradient(data, num_plots=50, savefig=reflectance)
+#
+# R = rd.Reader()
+# r= R.read_dat(reflectance_data_files)
+# f = R.format_dat(r)
+# P.plot_heatmap(f, **kwargs)
 
 
 ### 28.03. Data for curve fitting
-# file_path = '/Volumes/DATA/SDC_Experimente/2025-03-06/6/RUN@18.16.23/'
 # run_18_16 = find_files(file_path, file_format=".dat")
 # run_18_16_dat = read_data_dat(run_18_16)
 # run_18_16_xy = P.plot_gradient(run_18_16_dat, num_plots=10)
